@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebXR with Three.js Example</title>
+    <title>AR with WebXR and Three.js</title>
     <style>
         body { margin: 0; }
         canvas { display: block; }
@@ -13,7 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@webxr/threejs@0.0.1-beta.0/build/webxr.min.js"></script>
     <script>
-        // Set up the basic scene
+        // Set up the scene, camera, and renderer
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -30,12 +30,43 @@
         // Position the camera
         camera.position.z = 5;
 
-        // Add VR button to the page
-        document.body.appendChild(THREE.WebXR.createButton(renderer));
+        // Set up AR button
+        const arButton = THREE.WebXR.createButton(renderer, { requiredFeatures: ['hit-test'] });
+        document.body.appendChild(arButton);
+
+        // Set up AR hit test
+        let hitTestSource = null;
+        let hitTestSourceRequested = false;
+
+        function setupHitTestSource() {
+            if (hitTestSourceRequested) return;
+
+            navigator.xr.requestSession('immersive-ar', {
+                requiredFeatures: ['hit-test']
+            }).then((session) => {
+                session.requestReferenceSpace('viewer').then((referenceSpace) => {
+                    session.requestHitTestSource({
+                        space: referenceSpace
+                    }).then((source) => {
+                        hitTestSource = source;
+                        hitTestSourceRequested = true;
+                    });
+                });
+            });
+        }
 
         // Animation loop
         function animate() {
             renderer.setAnimationLoop(() => {
+                // Update hit test
+                if (hitTestSource) {
+                    const hits = renderer.xr.getHitTestResults(hitTestSource);
+                    if (hits.length > 0) {
+                        const hit = hits[0];
+                        cube.position.copy(hit.getPose(renderer.xr.referenceSpace).transform.position);
+                    }
+                }
+
                 cube.rotation.x += 0.01;
                 cube.rotation.y += 0.01;
                 renderer.render(scene, camera);
@@ -50,6 +81,11 @@
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Set up AR hit test on XR session start
+        navigator.xr.requestDevice().then(device => {
+            device.addEventListener('sessionstart', setupHitTestSource);
         });
     </script>
 </body>
