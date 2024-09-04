@@ -11,7 +11,7 @@
 </head>
 <body>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@webxr/threejs@0.0.1-beta.0/build/webxr.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/VRButton.min.js"></script>
     <script>
         // Set up the scene, camera, and renderer
         const scene = new THREE.Scene();
@@ -31,26 +31,19 @@
         camera.position.z = 5;
 
         // Set up AR button
-        const arButton = THREE.WebXR.createButton(renderer, { requiredFeatures: ['hit-test'] });
-        document.body.appendChild(arButton);
+        document.body.appendChild(THREE.VRButton.createButton(renderer));
 
-        // Set up AR hit test
+        // Create an AR hit test source
         let hitTestSource = null;
         let hitTestSourceRequested = false;
 
-        function setupHitTestSource() {
+        function setupHitTestSource(session) {
             if (hitTestSourceRequested) return;
 
-            navigator.xr.requestSession('immersive-ar', {
-                requiredFeatures: ['hit-test']
-            }).then((session) => {
-                session.requestReferenceSpace('viewer').then((referenceSpace) => {
-                    session.requestHitTestSource({
-                        space: referenceSpace
-                    }).then((source) => {
-                        hitTestSource = source;
-                        hitTestSourceRequested = true;
-                    });
+            session.requestReferenceSpace('viewer').then(referenceSpace => {
+                session.requestHitTestSource({ space: referenceSpace }).then(source => {
+                    hitTestSource = source;
+                    hitTestSourceRequested = true;
                 });
             });
         }
@@ -58,12 +51,13 @@
         // Animation loop
         function animate() {
             renderer.setAnimationLoop(() => {
-                // Update hit test
                 if (hitTestSource) {
                     const hits = renderer.xr.getHitTestResults(hitTestSource);
                     if (hits.length > 0) {
-                        const hit = hits[0];
-                        cube.position.copy(hit.getPose(renderer.xr.referenceSpace).transform.position);
+                        const hitPose = hits[0].getPose(renderer.xr.referenceSpace);
+                        if (hitPose) {
+                            cube.position.set(hitPose.transform.position.x, hitPose.transform.position.y, hitPose.transform.position.z);
+                        }
                     }
                 }
 
@@ -83,9 +77,11 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // Set up AR hit test on XR session start
+        // Setup AR hit test on XR session start
         navigator.xr.requestDevice().then(device => {
-            device.addEventListener('sessionstart', setupHitTestSource);
+            device.addEventListener('sessionstart', event => {
+                setupHitTestSource(event.session);
+            });
         });
     </script>
 </body>
