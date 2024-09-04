@@ -11,78 +11,85 @@
 </head>
 <body>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/VRButton.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/jsm/VRButton.js"></script>
     <script>
-        // Set up the scene, camera, and renderer
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.xr.enabled = true;
-        document.body.appendChild(renderer.domElement);
+        let scene, camera, renderer, cube, controller;
 
-        // Add a simple cube to the scene
-        const geometry = new THREE.BoxGeometry();
-        const material = new THREE.MeshBasicMaterial({ color: 0x0077ff });
-        const cube = new THREE.Mesh(geometry, material);
-        scene.add(cube);
+        function init() {
+            // Set up the scene, camera, and renderer
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true;
+            document.body.appendChild(renderer.domElement);
 
-        // Position the camera
-        camera.position.z = 5;
+            // Add a simple cube to the scene
+            const geometry = new THREE.BoxGeometry();
+            const material = new THREE.MeshBasicMaterial({ color: 0x0077ff });
+            cube = new THREE.Mesh(geometry, material);
+            scene.add(cube);
 
-        // Set up AR button
-        document.body.appendChild(THREE.VRButton.createButton(renderer));
+            // Position the camera
+            camera.position.z = 5;
 
-        // Create an AR hit test source
-        let hitTestSource = null;
-        let hitTestSourceRequested = false;
+            // Set up AR button
+            document.body.appendChild(THREE.VRButton.createButton(renderer));
 
-        function setupHitTestSource(session) {
-            if (hitTestSourceRequested) return;
+            // Set up AR hit test
+            setupHitTest();
 
-            session.requestReferenceSpace('viewer').then(referenceSpace => {
-                session.requestHitTestSource({ space: referenceSpace }).then(source => {
-                    hitTestSource = source;
-                    hitTestSourceRequested = true;
-                });
+            // Start the animation loop
+            animate();
+
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
             });
         }
 
-        // Animation loop
-        function animate() {
-            renderer.setAnimationLoop(() => {
-                if (hitTestSource) {
-                    const hits = renderer.xr.getHitTestResults(hitTestSource);
-                    if (hits.length > 0) {
-                        const hitPose = hits[0].getPose(renderer.xr.referenceSpace);
-                        if (hitPose) {
-                            cube.position.set(hitPose.transform.position.x, hitPose.transform.position.y, hitPose.transform.position.z);
+        function setupHitTest() {
+            let hitTestSource = null;
+            let hitTestSourceRequested = false;
+
+            // Set up AR hit test source
+            async function requestHitTestSource() {
+                const session = await navigator.xr.requestSession('immersive-ar', { requiredFeatures: ['hit-test'] });
+                const referenceSpace = await session.requestReferenceSpace('viewer');
+                hitTestSource = await session.requestHitTestSource({ space: referenceSpace });
+                hitTestSourceRequested = true;
+            }
+
+            requestHitTestSource().catch(console.error);
+
+            // Animation loop
+            function animate() {
+                renderer.setAnimationLoop(() => {
+                    if (hitTestSource) {
+                        const hits = renderer.xr.getHitTestResults(hitTestSource);
+                        if (hits.length > 0) {
+                            const hitPose = hits[0].getPose(renderer.xr.referenceSpace);
+                            if (hitPose) {
+                                cube.position.set(
+                                    hitPose.transform.position.x,
+                                    hitPose.transform.position.y,
+                                    hitPose.transform.position.z
+                                );
+                            }
                         }
                     }
-                }
 
-                cube.rotation.x += 0.01;
-                cube.rotation.y += 0.01;
-                renderer.render(scene, camera);
-            });
+                    cube.rotation.x += 0.01;
+                    cube.rotation.y += 0.01;
+                    renderer.render(scene, camera);
+                });
+            }
         }
 
-        // Start the animation
-        animate();
-
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        // Setup AR hit test on XR session start
-        navigator.xr.requestDevice().then(device => {
-            device.addEventListener('sessionstart', event => {
-                setupHitTestSource(event.session);
-            });
-        });
+        // Initialize the scene
+        init();
     </script>
 </body>
 </html>
